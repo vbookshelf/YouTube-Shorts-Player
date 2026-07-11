@@ -6,6 +6,7 @@ A minimalist, browser-based, vertical scroll YouTube Shorts player for custom pl
 - Uses familiar TikTok scroll mechanics.
 - Can be hosted online or launched from the desktop.
 - Playlists are easy to share.
+- Project folder includes an example playlist for testing.
 
 Online demo:<br>
 https://shorts-player.woza.work/
