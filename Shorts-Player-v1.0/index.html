@@ -1,0 +1,1301 @@
+<!--
+# Shorts Player
+# GitHub: https://github.com/vbookshelf/YouTube-Shorts-Player
+# License: MIT (You are free to share this app with others.)
+# Version: 1.0
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Shorts Player</title>
+    <meta name="description" content="A minimalist, vertical scroll YouTube Shorts player for your custom playlist. Free. No ads. Open source.">
+	
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect x=%224.8%22 y=%221.2%22 width=%2214.4%22 height=%2221.6%22 rx=%222.9%22 fill=%22white%22 stroke=%22%23c9c9c9%22 stroke-width=%220.5%22/><path d=%22M9.4 8.2 L9.4 15.8 L16.6 12 Z%22 fill=%22%238d7039%22/></svg>">
+
+    <style>
+        :root {
+            --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --bg-paper: #f0f2f5;
+            --text-primary: #2d3436;
+            --text-secondary: #636e72;
+            --accent-gold: #c5a059;
+            --accent-dark: #8d7039;
+            --body-bg-start: #fbfbf8;
+            --body-bg-end: #e8e6e1;
+            --pill-bg: rgba(255, 255, 255, 0.9);
+            --overlay-bg: rgba(255, 255, 255, 0.95);
+            --mute-bg: rgba(255, 255, 255, 0.9);
+            --dark-toggle-bg: rgba(255, 255, 255, 0.9);
+            --error-color: #ac4d42;
+            --text-muted: #676e75;
+        }
+
+        :root.dark {
+            --bg-paper: #1a1a2e;
+            --text-primary: #e8e4d9;
+            --text-secondary: #9a9080;
+            --accent-gold: #d4af6a;
+            --accent-dark: #b8943e;
+            --body-bg-start: #12111a;
+            --body-bg-end: #1e1c28;
+            --pill-bg: rgba(30, 28, 40, 0.92);
+            --overlay-bg: rgba(18, 17, 26, 0.97);
+            --mute-bg: rgba(30, 28, 40, 0.92);
+            --dark-toggle-bg: rgba(30, 28, 40, 0.92);
+            --error-color: #d98f7f;
+            --text-muted: #b8ae9c;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-system);
+            background-color: var(--body-bg-end);
+            background-image: radial-gradient(circle at center, var(--body-bg-start) 0%, var(--body-bg-end) 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        /* --- The TikTok-style scroll container --- */
+        .feed-container {
+            height: 100vh;
+            width: 100vw;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .feed-container::-webkit-scrollbar { display: none; }
+
+        /* --- Individual screen (video) --- */
+        .video-screen {
+            height: 100vh;
+            width: 100vw;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .video-screen:focus-visible {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: -3px;
+        }
+
+        .video-frame {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: calc(100vh * 9 / 16);
+            max-height: 100vh;
+            background: #000;
+            overflow: hidden;
+        }
+
+        @media (min-width: 601px) {
+            .video-frame {
+                border-radius: 18px;
+                max-height: 92vh;
+                max-width: calc(92vh * 9 / 16);
+            }
+        }
+
+        .player-mount { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .player-mount iframe { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+
+        /* --- Empty state (shown until a playlist is loaded) ---
+           Lives inside a .video-frame (see showEmptyState()), so it
+           fills that frame rather than the full viewport, keeping the
+           "device" metaphor consistent with the video screens. */
+        .video-frame.empty-frame {
+            /* Intentionally fixed, not following :root.dark: the
+               landing frame keeps one consistent dark look regardless
+               of site theme, so it always reads as "the device" rather
+               than shifting with dark mode. Overriding these variables
+               locally means every child element (heading, text,
+               dropzone, button) that already reads var(--text-primary)
+               etc. picks up the dark-mode values automatically. */
+            --bg-paper: #1a1a2e;
+            --text-primary: #e8e4d9;
+            --text-secondary: #9a9080;
+            --text-muted: #b8ae9c;
+            --accent-gold: #d4af6a;
+            --accent-dark: #b8943e;
+            background: var(--bg-paper);
+            transition: background-color 0.4s ease;
+        }
+        .empty-state {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 26px;
+        }
+        .empty-state h2 {
+            font-family: var(--font-system);
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            font-size: 1.3rem;
+            color: var(--accent-dark);
+            margin: 0 0 18px;
+            padding-bottom: 14px;
+            position: relative;
+        }
+        .empty-state h2::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 2px;
+            background: var(--accent-gold);
+            border-radius: 2px;
+            opacity: 0.6;
+        }
+        .empty-state p {
+            font-family: var(--font-system);
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            max-width: 280px;
+            line-height: 1.55;
+            margin: 0 0 22px;
+        }
+        .empty-state .dropzone {
+            margin-top: 4px;
+        }
+
+        /* --- Floating header --- */
+        .floating-header {
+            position: fixed;
+            top: 20px;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+        .floating-header.hidden {
+            display: none;
+        }
+        .playlist-pill {
+            pointer-events: auto;
+            background: var(--pill-bg);
+            backdrop-filter: blur(10px);
+            padding: 12px 25px;
+            border-radius: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            font-family: var(--font-system);
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            max-width: 80vw;
+        }
+        .playlist-pill span#current-playlist-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .playlist-pill:focus-visible,
+        .close-overlay:focus-visible,
+        .mute-button:focus-visible,
+        .dark-toggle:focus-visible,
+        .choose-file-btn:focus-visible {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: 2px;
+        }
+
+        /* --- Load-playlist overlay --- */
+        .playlist-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--overlay-bg);
+            z-index: 400;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            padding: 0 24px;
+            text-align: center;
+        }
+        .playlist-overlay.open { opacity: 1; visibility: visible; }
+
+        .play-order {
+            display: flex;
+            justify-content: center;
+            gap: 26px;
+            margin-bottom: 26px;
+        }
+        .play-order-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: var(--font-system);
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            position: relative;
+        }
+        .play-order-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .play-order-dot {
+            width: 17px;
+            height: 17px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            border: 1px solid rgba(197, 160, 89, 0.5);
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+        .play-order-dot::after {
+            content: "";
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--accent-gold);
+            transform: translate(-50%, -50%) scale(0);
+            transition: transform 0.15s ease;
+        }
+        .play-order-option input[type="radio"]:checked + .play-order-dot {
+            border-color: var(--accent-gold);
+        }
+        .play-order-option input[type="radio"]:checked + .play-order-dot::after {
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .play-order-option input[type="radio"]:focus-visible + .play-order-dot {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: 2px;
+        }
+
+        .dropzone {
+            width: min(340px, 100%);
+            border: 2px dashed rgba(197, 160, 89, 0.5);
+            border-radius: 16px;
+            padding: 30px 20px;
+            margin-bottom: 18px;
+            transition: border-color 0.2s ease, background-color 0.2s ease;
+        }
+        .dropzone.drag-over {
+            border-color: var(--accent-gold);
+            background-color: rgba(197, 160, 89, 0.08);
+        }
+
+        .choose-file-btn {
+            font-family: var(--font-system);
+            font-weight: 500;
+            font-size: 0.85rem;
+            text-transform: none; /*uppercase;*/
+            letter-spacing: 1px;
+            color: var(--accent-dark);
+            background: transparent;
+            border: none; /*1px solid var(--accent-gold);*/
+            border-radius: 30px;
+            padding: 12px 26px;
+            cursor: pointer;
+        }
+        .dropzone-hint {
+            font-family: var(--font-system);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 14px;
+        }
+        .hidden-file-input { display: none; }
+
+        .format-example {
+            width: min(340px, 100%);
+            box-sizing: border-box;
+            text-align: left;
+            border: 1px solid rgba(197, 160, 89, 0.25);
+            border-radius: 10px;
+            padding: 0 0 10px;
+            margin: 0 0 22px;
+            overflow: hidden;
+        }
+        .format-example-tab {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-system);
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            color: var(--accent-dark);
+            background: rgba(197, 160, 89, 0.07);
+            border-bottom: 1px solid rgba(197, 160, 89, 0.25);
+            padding: 7px 14px;
+            margin: 0 0 10px;
+        }
+        .format-example-tab svg {
+            width: 11px;
+            height: 11px;
+            flex-shrink: 0;
+            fill: var(--accent-dark);
+            opacity: 0.85;
+        }
+        .format-example code {
+            display: block;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.62rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 14px;
+        }
+
+        .overlay-status {
+            font-family: var(--font-system);
+            font-size: 0.85rem;
+            min-height: 1.4em;
+            margin-bottom: 20px;
+        }
+        .overlay-status.error { color: var(--error-color); }
+        .overlay-status.success { color: var(--accent-dark); }
+
+        .close-overlay {
+            margin-top: 10px;
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            border: 1px solid var(--text-secondary);
+            background: transparent;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        /* --- Mute button --- */
+        .mute-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 300;
+            width: 50px; height: 50px;
+            background-color: var(--mute-bg);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            backdrop-filter: blur(10px);
+            transition: background-color 0.4s ease;
+        }
+        .mute-button svg { width: 24px; height: 24px; fill: var(--text-secondary); }
+        #icon-unmuted { display: none; }
+
+        .mute-button.auto-muted-pulse {
+            animation: mute-pulse 0.6s ease-in-out 2;
+        }
+        @keyframes mute-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+            50% { transform: scale(1.18); box-shadow: 0 4px 20px rgba(197, 160, 89, 0.55); }
+        }
+
+        /* --- Dark mode toggle --- */
+        .dark-toggle {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            z-index: 300;
+            width: 50px; height: 50px;
+            background-color: var(--dark-toggle-bg);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            backdrop-filter: blur(10px);
+            transition: background-color 0.4s ease;
+        }
+        .dark-toggle svg {
+            width: 22px; height: 22px;
+            color: var(--text-secondary);
+            transition: color 0.4s ease;
+        }
+        :root.dark .dark-toggle .icon-bulb path { stroke: var(--accent-gold); }
+
+        @media (max-width: 600px) {
+            .dark-toggle { display: none; }
+        }
+
+        /* --- YouTube API load-failure fallback --- */
+        .yt-load-error-banner {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 150;
+            max-width: 320px;
+            width: calc(100% - 40px);
+            background: var(--overlay-bg);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 16px;
+            padding: 16px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            backdrop-filter: blur(10px);
+            text-align: center;
+            font-family: var(--font-system);
+            color: var(--text-primary);
+            display: none;
+        }
+        .yt-load-error-banner.visible { display: block; }
+        .yt-load-error-banner p {
+            margin: 0 0 12px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+        .yt-load-error-banner button {
+            font-family: var(--font-system);
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--accent-dark);
+            background: transparent;
+            border: 1px solid var(--accent-gold);
+            border-radius: 20px;
+            padding: 8px 20px;
+            cursor: pointer;
+        }
+        .yt-load-error-banner button:focus-visible {
+            outline: 3px solid var(--accent-gold);
+            outline-offset: 2px;
+        }
+
+        /* --- Respect reduced-motion preference ---
+           JS mirrors this for scrollIntoView calls (which ignore CSS
+           scroll-behavior and take their own 'smooth'/'instant' arg),
+           via the prefersReducedMotion check. */
+        @media (prefers-reduced-motion: reduce) {
+            .feed-container { scroll-behavior: auto; }
+            .mute-button.auto-muted-pulse { animation: none; }
+            *, *::before, *::after {
+                transition-duration: 0.001ms !important;
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1 class="sr-only">Shorts Player</h1>
+
+    <!-- Floating Header -->
+    <header class="floating-header" id="floating-header" role="banner">
+        <div class="playlist-pill" id="playlist-trigger" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="No playlist loaded. Upload a playlist.">
+            <span id="current-playlist-label">Upload Playlist</span>
+            <span style="color: var(--accent-gold); font-size: 0.8em;" aria-hidden="true">▼</span>
+        </div>
+    </header>
+
+    <!-- Full Screen Scroll Container -->
+    <main class="feed-container" id="feed-container" role="main" aria-label="Shorts Feed">
+        <!-- JS populates either the empty-state prompt or video screens here -->
+    </main>
+
+    <!-- Load Playlist Overlay -->
+    <div class="playlist-overlay" id="playlist-overlay" role="dialog" aria-modal="true" aria-label="Load Playlist">
+
+        <div class="play-order" role="radiogroup" aria-label="Playback order">
+            <label class="play-order-option">
+                <input type="radio" name="play-order" value="original" checked>
+                <span class="play-order-dot" aria-hidden="true"></span>
+                Original order
+            </label>
+            <label class="play-order-option">
+                <input type="radio" name="play-order" value="shuffle">
+                <span class="play-order-dot" aria-hidden="true"></span>
+                Shuffle
+            </label>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+            <button type="button" class="choose-file-btn" id="choose-file-btn">Select File</button>
+            <div class="dropzone-hint">or drag a .txt file anywhere on this page</div>
+        </div>
+        <input type="file" id="playlist-file-input" class="hidden-file-input" accept=".txt,text/plain">
+
+        <div class="overlay-status" id="overlay-status" role="status" aria-live="polite"></div>
+
+        <button class="close-overlay" aria-label="Close Menu">✕</button>
+
+    </div>
+
+    <!-- Dark Mode Toggle -->
+    <button class="dark-toggle" id="dark-toggle" aria-label="Switch to dark mode">
+        <svg class="icon-bulb" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 21h6M10 17.5h4M12 3a7 7 0 0 1 4 12.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-1.26A7 7 0 0 1 12 3z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </button>
+
+    <!-- Mute Button (controls the active video's sound) -->
+    <div class="mute-button" id="mute-button" role="button" tabindex="0" aria-label="Unmute video">
+        <svg id="icon-muted" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+        <svg id="icon-unmuted" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+    </div>
+
+    <!-- YouTube API load-failure fallback (hidden unless the API
+         never becomes ready within YT_API_TIMEOUT_MS) -->
+    <div class="yt-load-error-banner" id="yt-load-error-banner" role="alert">
+        <p>Videos are not loading. Please check your connection.</p>
+        <button type="button" id="yt-load-error-retry">Retry</button>
+    </div>
+
+    <script>
+        // ============================================================
+        // PLAYLIST PARSING
+        // Accepts a plain-text file with one YouTube Shorts URL (or
+        // bare 11-char video ID) per line. Blank lines are ignored;
+        // lines that don't match a recognizable pattern are skipped
+        // and counted so the user gets feedback instead of a silent
+        // partial import.
+        // ============================================================
+        function extractVideoId(line) {
+            const trimmed = line.trim();
+            if (!trimmed) return null;
+            if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+            const patterns = [
+                /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+                /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
+            ];
+            for (const re of patterns) {
+                const m = trimmed.match(re);
+                if (m) return m[1];
+            }
+            return null;
+        }
+
+        function parsePlaylistText(text) {
+            const lines = text.split(/\r?\n/);
+            const videos = [];
+            let skipped = 0;
+            lines.forEach((line) => {
+                if (!line.trim()) return;
+                const id = extractVideoId(line);
+                if (id) videos.push({ id, title: 'Short', rate: 1 });
+                else skipped++;
+            });
+            return { videos, skipped };
+        }
+
+        // Current playlist state. appendVideos() re-reads this array
+        // every time it's called (including on infinite-scroll loads),
+        // so once the end is reached the feed simply loops back to the
+        // start of the same list, in the order the user provided.
+        //
+        // originalPlaylist always holds the videos in the order parsed
+        // from the .txt file. currentPlaylist holds the order actually
+        // played (a shuffled copy, when playOrder === 'shuffle'), kept
+        // separate so switching back to "Original order" doesn't
+        // require re-parsing or lose the source order.
+        let originalPlaylist = [];
+        let currentPlaylist = [];
+        let playOrder = 'original'; // 'original' | 'shuffle'
+
+        function shuffleArray(arr) {
+            const result = arr.slice();
+            for (let i = result.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [result[i], result[j]] = [result[j], result[i]];
+            }
+            return result;
+        }
+
+        // Rebuilds currentPlaylist from originalPlaylist according to
+        // the active playOrder. Called whenever a new playlist loads
+        // or the user changes the order selection.
+        function applyPlayOrder() {
+            currentPlaylist = playOrder === 'shuffle'
+                ? shuffleArray(originalPlaylist)
+                : originalPlaylist.slice();
+        }
+
+        function getFeedData() {
+            return currentPlaylist.map((v) => ({ ...v }));
+        }
+
+        const feedContainer = document.getElementById('feed-container');
+        const floatingHeader = document.getElementById('floating-header');
+        const playlistTrigger = document.getElementById('playlist-trigger');
+        const playlistOverlay = document.getElementById('playlist-overlay');
+        const currentPlaylistLabel = document.getElementById('current-playlist-label');
+        const closeOverlayBtn = document.querySelector('.close-overlay');
+        const chooseFileBtn = document.getElementById('choose-file-btn');
+        const fileInput = document.getElementById('playlist-file-input');
+        const dropzone = document.getElementById('dropzone');
+        const overlayStatus = document.getElementById('overlay-status');
+
+        const muteButton = document.getElementById('mute-button');
+        const iconMuted = document.getElementById('icon-muted');
+        const iconUnmuted = document.getElementById('icon-unmuted');
+
+        let isLoading = false;
+        let hasUserScrolled = false;
+        let screenCounter = 0;
+
+        // --- YouTube IFrame API state ---
+        // (Mirrors the original player's approach: every player starts
+        // muted regardless of user preference, because browsers gate
+        // *starting* playback with audio on behind a much stricter
+        // autoplay check than muted playback. The real mute preference
+        // is applied once PLAYING actually fires, in onStateChange.)
+        let ytApiReady = false;
+        const playerMap = new Map();   // screenId -> player wrapper
+        let activeScreenId = null;
+        let userMuted = true;          // start muted: required for reliable autoplay
+        let furthestIndex = null;      // high-water mark used to detect backward scrolling
+        let previousIndex = null;      // index of the last activated screen
+
+        const YT_API_TIMEOUT_MS = 10000;
+        const ytLoadErrorBanner = document.getElementById('yt-load-error-banner');
+        const ytLoadErrorRetry = document.getElementById('yt-load-error-retry');
+        let ytApiTimeoutId = null;
+
+        function showYtLoadError() {
+            if (ytApiReady) return;
+            ytLoadErrorBanner.classList.add('visible');
+        }
+
+        function loadYouTubeApi() {
+            ytLoadErrorBanner.classList.remove('visible');
+            clearTimeout(ytApiTimeoutId);
+            ytApiTimeoutId = setTimeout(showYtLoadError, YT_API_TIMEOUT_MS);
+
+            const tag = document.createElement('script');
+            tag.src = 'https://www.youtube.com/iframe_api';
+            tag.onerror = showYtLoadError;
+            document.head.appendChild(tag);
+        }
+
+        loadYouTubeApi();
+
+        ytLoadErrorRetry.addEventListener('click', () => {
+            window.location.reload();
+        });
+
+        window.onYouTubeIframeAPIReady = function () {
+            ytApiReady = true;
+            clearTimeout(ytApiTimeoutId);
+            ytLoadErrorBanner.classList.remove('visible');
+            document.querySelectorAll('.video-screen.active').forEach(activateScreen);
+        };
+
+        // --- Playback Observer: only the >=60%-visible screen plays ---
+        const playbackObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                const screen = entry.target;
+                if (entry.intersectionRatio >= 0.6) {
+                    screen.classList.add('active');
+                    activateScreen(screen);
+                } else {
+                    screen.classList.remove('active');
+                    safePause(screen.dataset.screenId);
+                }
+            });
+        }, { root: feedContainer, threshold: [0, 0.6] });
+
+        function safePlay(screenId) {
+            const wrapper = playerMap.get(screenId);
+            if (!wrapper) return;
+            wrapper.wantPlay = true;
+            if (wrapper.ready) {
+                try { wrapper.instance.playVideo(); } catch (e) {}
+            }
+        }
+
+        function safePause(screenId) {
+            const wrapper = playerMap.get(screenId);
+            if (!wrapper) return;
+            wrapper.wantPlay = false;
+            if (wrapper.ready) {
+                try { wrapper.instance.pauseVideo(); } catch (e) {}
+            }
+        }
+
+        function createPlayer(screen, wantPlay) {
+            const screenId = screen.dataset.screenId;
+            if (playerMap.has(screenId)) return playerMap.get(screenId);
+
+            const wrapper = { instance: null, ready: false, wantPlay, errored: false };
+            playerMap.set(screenId, wrapper);
+
+            wrapper.instance = new YT.Player('player-mount-' + screenId, {
+                videoId: screen.dataset.videoId,
+                playerVars: {
+                    autoplay: wantPlay ? 1 : 0,
+                    mute: 1,
+                    playsinline: 1,
+                    controls: 1,
+                    rel: 0,
+                    iv_load_policy: 3,
+                    cc_load_policy: 0
+                },
+                events: {
+                    onReady: (e) => {
+                        wrapper.ready = true;
+                        const rate = parseFloat(screen.dataset.rate) || 1;
+                        try { e.target.setPlaybackRate(rate); } catch (err) {}
+                        try { e.target.unloadModule('captions'); } catch (err) {}
+                        if (wrapper.wantPlay) {
+                            try { e.target.playVideo(); } catch (err) {}
+                        } else {
+                            try { e.target.pauseVideo(); } catch (err) {}
+                        }
+                    },
+                    onStateChange: (e) => {
+                        if (e.data === YT.PlayerState.PLAYING) {
+                            try {
+                                if (userMuted) e.target.mute();
+                                else e.target.unMute();
+                            } catch (err) {}
+                        } else if (e.data === YT.PlayerState.ENDED) {
+                            if (AUTOPLAY_ENABLED && screen.dataset.screenId === activeScreenId) {
+                                advanceToNextScreen(screen);
+                            }
+                        }
+                    },
+                    onError: (e) => {
+                        wrapper.errored = true;
+                        console.warn('YouTube playback error', e.data, 'on screen', screenId);
+                        if (screen.dataset.screenId === activeScreenId) {
+                            advanceToNextScreen(screen, true);
+                        }
+                    }
+                }
+            });
+
+            return wrapper;
+        }
+
+        function prewarmNextScreen(screen) {
+            const next = screen.nextElementSibling;
+            if (!next || !next.classList.contains('video-screen')) return;
+            if (playerMap.has(next.dataset.screenId)) return;
+            createPlayer(next, false);
+        }
+
+        // Respected by scrollIntoView calls below and by the CSS
+        // (see the prefers-reduced-motion media query) so smooth
+        // snapping/animation is skipped for users who've asked for
+        // reduced motion at the OS level.
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        function advanceToNextScreen(screen, instant) {
+            const next = screen.nextElementSibling;
+            if (!next || !next.classList.contains('video-screen')) return;
+            next.scrollIntoView({ behavior: (instant || prefersReducedMotion) ? 'instant' : 'smooth', block: 'start' });
+        }
+
+        // Keyboard equivalent of scrolling the feed: moves focus (and
+        // the scroll position) to the next/previous short. Works in
+        // either direction, unlike advanceToNextScreen which is only
+        // ever used to move forward (on video end/error).
+        function goToAdjacentScreen(screen, direction) {
+            const sibling = direction === 'next' ? screen.nextElementSibling : screen.previousElementSibling;
+            if (!sibling || !sibling.classList.contains('video-screen')) return;
+            sibling.focus({ preventScroll: true });
+            sibling.scrollIntoView({ behavior: prefersReducedMotion ? 'instant' : 'smooth', block: 'start' });
+        }
+
+        function handleScreenKeydown(e) {
+            if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+                e.preventDefault();
+                goToAdjacentScreen(e.currentTarget, 'next');
+            } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+                e.preventDefault();
+                goToAdjacentScreen(e.currentTarget, 'previous');
+            }
+        }
+
+        function forceMuteForBackwardJump() {
+            if (userMuted) return;
+            userMuted = true;
+            updateMuteIcon();
+            const wrapper = playerMap.get(activeScreenId);
+            if (wrapper && wrapper.ready && wrapper.instance) {
+                try { wrapper.instance.mute(); } catch (e) {}
+            }
+            muteButton.classList.remove('auto-muted-pulse');
+            void muteButton.offsetWidth;
+            muteButton.classList.add('auto-muted-pulse');
+        }
+
+        function activateScreen(screen) {
+            if (!ytApiReady) return;
+            const screenId = screen.dataset.screenId;
+            const screenIndex = parseInt(screenId, 10);
+            const movingBackward = previousIndex !== null && screenIndex < previousIndex;
+
+            if (furthestIndex === null || screenIndex > furthestIndex) {
+                furthestIndex = screenIndex;
+            } else if (movingBackward && screenIndex < furthestIndex - 1) {
+                forceMuteForBackwardJump();
+            }
+            previousIndex = screenIndex;
+            activeScreenId = screenId;
+
+            if (!playerMap.has(screenId)) {
+                createPlayer(screen, true);
+            } else {
+                const wrapper = playerMap.get(screenId);
+                if (wrapper.errored) {
+                    advanceToNextScreen(screen, true);
+                } else {
+                    safePlay(screenId);
+                }
+            }
+            cleanupDistantPlayers(screenId);
+            prewarmNextScreen(screen);
+        }
+
+        function cleanupDistantPlayers(currentScreenId) {
+            const currentIndex = parseInt(currentScreenId, 10);
+            const keepIds = new Set([String(currentIndex), String(currentIndex + 1)]);
+            playerMap.forEach((wrapper, id) => {
+                if (!keepIds.has(id)) {
+                    if (wrapper.instance) {
+                        try { wrapper.instance.destroy(); } catch (e) {}
+                    }
+                    playerMap.delete(id);
+                }
+            });
+        }
+
+        function destroyAllPlayers() {
+            playerMap.forEach((wrapper) => {
+                if (wrapper.instance) {
+                    try { wrapper.instance.destroy(); } catch (e) {}
+                }
+            });
+            playerMap.clear();
+            activeScreenId = null;
+            furthestIndex = null;
+            previousIndex = null;
+        }
+
+        const AUTOPLAY_ENABLED = true;
+
+        // --- Core Logic: Append Video Screens ---
+        function appendVideos() {
+            const data = getFeedData();
+            if (data.length === 0) return;
+
+            data.forEach((item, index) => {
+                const screenId = screenCounter++;
+                const screen = document.createElement('div');
+                screen.className = 'video-screen';
+                screen.dataset.screenId = screenId;
+                screen.dataset.videoId = item.id;
+                screen.dataset.rate = item.rate || 1;
+                screen.setAttribute('role', 'article');
+                // Every video otherwise shares the same generic title
+                // ('Short' — there's no per-video metadata beyond the
+                // ID), so a position label ("Video 3 of 12") is what
+                // actually lets a screen reader user tell entries apart
+                // and know where they are in the playlist.
+                screen.setAttribute('aria-label', `Video ${index + 1} of ${data.length}`);
+                screen.tabIndex = 0;
+                screen.addEventListener('keydown', handleScreenKeydown);
+
+                screen.innerHTML = `
+                    <div class="video-frame">
+                        <div class="player-mount" id="player-mount-${screenId}"></div>
+                    </div>
+                `;
+
+                feedContainer.appendChild(screen);
+                playbackObserver.observe(screen);
+            });
+        }
+
+        function syncPlaylistUI() {
+            const count = currentPlaylist.length;
+            const label = count > 0 ? `Playlist (${count})` : 'Upload Playlist';
+            currentPlaylistLabel.textContent = label;
+            playlistTrigger.setAttribute('aria-label', count > 0
+                ? `Playlist loaded, ${count} videos. Replace playlist.`
+                : 'No playlist loaded. Upload a playlist.');
+            floatingHeader.classList.toggle('hidden', count === 0);
+        }
+
+        function showEmptyState() {
+            destroyAllPlayers();
+            feedContainer.innerHTML = `
+                <div class="video-screen">
+                    <div class="video-frame empty-frame">
+                        <div class="empty-state">
+                            <h2>Shorts Player</h2>
+                            <p>Upload a .txt file with your YouTube Shorts share links — one per line.</p>
+                            <div class="format-example" aria-hidden="true">
+                                <div class="format-example-tab">
+                                    <svg viewBox="0 0 24 24"><path d="M6 2a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6H6zm7 1.5L18.5 9H13V3.5z"/></svg>
+                                    playlist.txt
+                                </div>
+                                <code>https://youtube.com/shorts/EyZ5SWaY1dk?si=-4OJf5iT_T34nTuN</code>
+                                <code>https://youtube.com/shorts/qRALosiPS4A?si=WUDbjG0LNL2fGWut</code>
+                                <code>https://youtube.com/shorts/iQvfL7LlJ6A?si=5ybHmwXOs_8geh4B</code>
+                            </div>
+                            <div class="dropzone" id="landing-dropzone">
+                                <button type="button" class="choose-file-btn" id="landing-choose-file-btn">Select File</button>
+                                <div class="dropzone-hint">or drag a .txt file here</div>
+                            </div>
+                            <input type="file" class="hidden-file-input" id="landing-file-input" accept=".txt,text/plain">
+                            <div class="overlay-status" id="landing-status" role="status" aria-live="polite"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            wireDropzone(
+                document.getElementById('landing-dropzone'),
+                document.getElementById('landing-choose-file-btn'),
+                document.getElementById('landing-file-input'),
+                document.getElementById('landing-status')
+            );
+        }
+
+        function renderFeed() {
+            syncPlaylistUI();
+            destroyAllPlayers();
+            feedContainer.innerHTML = '';
+            feedContainer.scrollTop = 0;
+            screenCounter = 0;
+            if (currentPlaylist.length === 0) {
+                showEmptyState();
+                return;
+            }
+            appendVideos();
+            appendVideos();
+        }
+
+        feedContainer.addEventListener('scroll', () => {
+            if (currentPlaylist.length === 0) return;
+            if (feedContainer.scrollTop + feedContainer.clientHeight >= feedContainer.scrollHeight - 100) {
+                if (!isLoading) {
+                    isLoading = true;
+                    appendVideos();
+                    setTimeout(() => { isLoading = false; }, 100);
+                }
+            }
+            if (!hasUserScrolled) hasUserScrolled = true;
+        });
+
+        // --- ACCESSIBILITY LOGIC ---
+        function handleEnterSpace(e, callback) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                callback();
+            }
+        }
+
+        function openMenu() {
+            playlistOverlay.classList.add('open');
+            playlistTrigger.setAttribute('aria-expanded', 'true');
+            setBackgroundInert(true);
+            overlayStatus.textContent = '';
+            overlayStatus.className = 'overlay-status';
+            setTimeout(() => chooseFileBtn.focus(), 305);
+        }
+
+        function closeMenu() {
+            playlistOverlay.classList.remove('open');
+            playlistTrigger.setAttribute('aria-expanded', 'false');
+            setBackgroundInert(false);
+            playlistTrigger.focus();
+        }
+
+        // Makes every top-level element except the overlay itself
+        // unfocusable, unclickable, and hidden from assistive tech
+        // while the upload modal is open, so Tab can't walk focus (or
+        // touch/mouse interaction) out into background controls like
+        // the mute button or dark-mode toggle.
+        function setBackgroundInert(isInert) {
+            Array.from(document.body.children).forEach((el) => {
+                if (el === playlistOverlay) return;
+                if (isInert) el.setAttribute('inert', '');
+                else el.removeAttribute('inert');
+            });
+        }
+
+        // Keeps Tab (and Shift+Tab) cycling within just the focusable
+        // elements inside the dialog — the order radios, the "choose
+        // file" button, and the close button.
+        function trapTabKey(e) {
+            if (e.key !== 'Tab') return;
+            if (!playlistOverlay.classList.contains('open')) return;
+            const focusable = [
+                ...document.querySelectorAll('input[name="play-order"]'),
+                chooseFileBtn,
+                closeOverlayBtn
+            ];
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const current = document.activeElement;
+            if (e.shiftKey) {
+                if (current === first || !focusable.includes(current)) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (current === last || !focusable.includes(current)) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        }
+        playlistOverlay.addEventListener('keydown', trapTabKey);
+
+        playlistTrigger.addEventListener('click', openMenu);
+        playlistTrigger.addEventListener('keydown', (e) => handleEnterSpace(e, openMenu));
+        closeOverlayBtn.addEventListener('click', closeMenu);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && playlistOverlay.classList.contains('open')) closeMenu();
+        });
+
+        // --- FILE HANDLING ---
+        // statusEl defaults to the overlay's status line (used when
+        // loading/replacing a playlist via the modal); the landing
+        // dropzone passes its own status element instead, since the
+        // overlay isn't open in that flow.
+        function handlePlaylistFile(file, statusEl) {
+            statusEl = statusEl || overlayStatus;
+            if (!file) return;
+            statusEl.className = 'overlay-status';
+            statusEl.textContent = 'Reading file…';
+
+            const reader = new FileReader();
+            reader.onerror = () => {
+                statusEl.className = 'overlay-status error';
+                statusEl.textContent = "Couldn't read that file. Please try again.";
+            };
+            reader.onload = () => {
+                const { videos, skipped } = parsePlaylistText(String(reader.result || ''));
+                if (videos.length === 0) {
+                    statusEl.className = 'overlay-status error';
+                    statusEl.textContent = 'No valid YouTube links found in that file.';
+                    return;
+                }
+                originalPlaylist = videos;
+                applyPlayOrder();
+                statusEl.className = 'overlay-status success';
+                statusEl.textContent = skipped > 0
+                    ? `Loaded ${videos.length} videos (${skipped} line${skipped === 1 ? '' : 's'} skipped).`
+                    : `Loaded ${videos.length} videos.`;
+                renderFeed();
+                if (playlistOverlay.classList.contains('open')) {
+                    setTimeout(closeMenu, 900);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Wires click-to-browse and keyboard behavior onto a dropzone +
+        // choose-file button + file input trio. Drag-and-drop itself is
+        // handled globally (see below) so the whole page accepts a
+        // dropped file, not just this box — but this box is still what
+        // lights up, via getActiveDropzone().
+        function wireDropzone(dropzoneEl, chooseBtnEl, fileInputEl, statusEl) {
+            chooseBtnEl.addEventListener('click', () => fileInputEl.click());
+            fileInputEl.addEventListener('change', () => {
+                if (fileInputEl.files && fileInputEl.files[0]) handlePlaylistFile(fileInputEl.files[0], statusEl);
+                fileInputEl.value = '';
+            });
+        }
+
+        wireDropzone(dropzone, chooseFileBtn, fileInput, overlayStatus);
+
+        // --- PLAYBACK ORDER ---
+        document.querySelectorAll('input[name="play-order"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                if (!radio.checked) return;
+                playOrder = radio.value;
+                if (originalPlaylist.length > 0) {
+                    applyPlayOrder();
+                    renderFeed();
+                }
+            });
+        });
+
+        // --- GLOBAL DRAG-AND-DROP ---
+        // Accepts a dropped file anywhere on the page (not just inside
+        // the dashed box), so the user doesn't have to aim precisely.
+        // Only the currently-visible dropzone box is highlighted while
+        // dragging, via getActiveDropzone(); dragCounter guards against
+        // dragenter/dragleave flicker as the pointer crosses child
+        // elements while moving over the page.
+        let dragCounter = 0;
+
+        function isFileDrag(e) {
+            return !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+        }
+
+        function getActiveDropzone() {
+            if (playlistOverlay.classList.contains('open')) {
+                return { el: dropzone, statusEl: overlayStatus };
+            }
+            const landingDropzone = document.getElementById('landing-dropzone');
+            if (landingDropzone) {
+                return { el: landingDropzone, statusEl: document.getElementById('landing-status') };
+            }
+            return null;
+        }
+
+        function setActiveDropzoneHighlight(active) {
+            const target = getActiveDropzone();
+            if (target) target.el.classList.toggle('drag-over', active);
+        }
+
+        document.addEventListener('dragenter', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter++;
+            setActiveDropzoneHighlight(true);
+        });
+
+        document.addEventListener('dragover', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault(); // required continuously to permit a drop
+        });
+
+        document.addEventListener('dragleave', (e) => {
+            if (!isFileDrag(e)) return;
+            dragCounter = Math.max(0, dragCounter - 1);
+            if (dragCounter === 0) setActiveDropzoneHighlight(false);
+        });
+
+        document.addEventListener('drop', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragCounter = 0;
+            setActiveDropzoneHighlight(false);
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            const target = getActiveDropzone();
+            handlePlaylistFile(file, target ? target.statusEl : overlayStatus);
+        });
+
+        // --- MUTE LOGIC (video sound, not background audio) ---
+        function updateMuteIcon() {
+            iconMuted.style.display = userMuted ? 'block' : 'none';
+            iconUnmuted.style.display = userMuted ? 'none' : 'block';
+            muteButton.setAttribute('aria-label', userMuted ? 'Unmute video' : 'Mute video');
+        }
+
+        function toggleMute() {
+            userMuted = !userMuted;
+            updateMuteIcon();
+            const wrapper = playerMap.get(activeScreenId);
+            if (wrapper && wrapper.ready && wrapper.instance) {
+                try {
+                    if (userMuted) wrapper.instance.mute();
+                    else wrapper.instance.unMute();
+                } catch (e) {}
+            }
+        }
+
+        muteButton.addEventListener('click', toggleMute);
+        muteButton.addEventListener('keydown', (e) => handleEnterSpace(e, toggleMute));
+        updateMuteIcon();
+        muteButton.classList.add('auto-muted-pulse');
+
+        // --- DARK MODE TOGGLE ---
+        const darkToggle = document.getElementById('dark-toggle');
+        const root = document.documentElement;
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const mobileQuery = window.matchMedia('(max-width: 600px)');
+
+        function applyTheme(dark) {
+            root.classList.toggle('dark', dark);
+            darkToggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+        }
+
+        function safeGetStoredTheme() {
+            try { return localStorage.getItem('shorts-player-theme'); }
+            catch (e) { return null; }
+        }
+        function safeSetStoredTheme(value) {
+            try { localStorage.setItem('shorts-player-theme', value); }
+            catch (e) { /* not persisted this session; non-fatal */ }
+        }
+
+        function resolveTheme() {
+            if (mobileQuery.matches) {
+                applyTheme(true);
+                return;
+            }
+            const savedTheme = safeGetStoredTheme();
+            applyTheme(savedTheme === 'dark' || (!savedTheme && prefersDark));
+        }
+
+        resolveTheme();
+        mobileQuery.addEventListener('change', resolveTheme);
+
+        darkToggle.addEventListener('click', () => {
+            if (mobileQuery.matches) return;
+            const isDark = !root.classList.contains('dark');
+            applyTheme(isDark);
+            safeSetStoredTheme(isDark ? 'dark' : 'light');
+        });
+        darkToggle.addEventListener('keydown', (e) => handleEnterSpace(e, () => darkToggle.click()));
+
+        // --- INITIALIZATION ---
+        renderFeed();
+    </script>
+
+</body>
+</html>
