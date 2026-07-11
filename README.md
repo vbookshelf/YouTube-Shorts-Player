@@ -1,5 +1,5 @@
 # YouTube Shorts Player
-A minimalist, browser-based, vertical scroll YouTube Shorts player for custom playlists.
+A minimalist, browser-based, vertical scroll Shorts player for custom playlists.
 
 - Scroll through curated short video playlists - no ads or toxic content.
 - Simply upload a txt file with a list of short video links to get started.
