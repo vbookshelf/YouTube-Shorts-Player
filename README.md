@@ -14,5 +14,9 @@ https://shorts-player.woza.work/
 <p>Dark mode</p>
 
 <br>
+<img src="images/image4.png" alt="Txt file sample" width="800">
+<p>How to get the video link</p>
+
+<br>
 <img src="images/image3.png" alt="Txt file sample" height="500">
-<p>Example txt file</p>
+<p>Example txt file with list of video links</p>
