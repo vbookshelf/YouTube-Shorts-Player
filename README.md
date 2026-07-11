@@ -27,3 +27,41 @@ https://shorts-player.woza.work/
 <br>
 <img src="images/image3.png" alt="Txt file sample" height="500">
 <p>Example txt file with list of video links</p>
+
+<br>
+
+## How to run the app
+
+The code needs to be on a server for the video features to work. You can upload the code to a shared web server, like Dreamhost, or use a local desktop server.
+
+This is how to use the python server on a Mac:
+
+- Open the Terminal.
+- Navigate to the folder containing the index.html file.
+- Start the server by typing this in the terminal:<br>
+```
+  python3 -m http.server 8000
+```
+- Paste this into your web browser to launch the app:<br>
+```
+  http://localhost:8000/
+```
+- When you're done, go back to Terminal and press Ctrl+C to stop the server.
+
+<br>
+
+## Notes
+
+- The main weakness of this concept is that it relies on a third party platform (YouTube) where videos are created and hosted. The risk is that, at any time, the platform could change it's terms of service regarding embedding YouTube Shorts. That change could impact all web apps that use iframes to display YouTube short videos. Those changes could be negative, but they could also be positive if, for example, YouTube gave video creators finer grained control over how web apps embed their content.
+- When scrolling backwards, beyond video n-1, the audio is automatically disabled to prevent lagging. When the user re-engages the audio, playback continues smoothly. However, playback still lags when the user tries to re-enable audio when on the n-2 video. The other past videos (n-3, n-4, etc.) work without lagging.
+
+
+<br>
+
+## Revision History
+
+Version 1.0<br>
+12-July-2026<br>
+First release.
+
+<br>
