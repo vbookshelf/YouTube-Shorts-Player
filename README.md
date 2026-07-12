@@ -53,7 +53,7 @@ This is how to use the python server on a Mac:
 
 ## Notes
 
-- This player depends on the source videos staying up, YouTube's iframe API continuing to work reliably, and YouTube's terms of service continuing to allow their videos to be embedded in websites. The concept of short video scrolling as a new content category is plausible, but it currently stands on a brittle foundation.
+- This player depends on the source videos staying up, YouTube's iframe API continuing to work reliably, and YouTube's terms of service continuing to allow their videos to be embedded in websites. Curated short video scrolling as a new content category is plausible, but it currently stands on a brittle foundation.
 - When scrolling backwards, beyond video n-1, the audio is automatically disabled to prevent lagging. When the user re-engages the audio, playback continues smoothly. However, playback still lags when the user tries to re-enable audio when on the n-2 video. The other past videos (n-3, n-4, etc.) work without lagging.
 
 <br>
