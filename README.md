@@ -1,7 +1,8 @@
 # YouTube Shorts Player
 A minimalist, browser-based, vertical scroll Shorts player for custom playlists.
 
-- Scroll through curated short video playlists - no ads or toxic content.
+- The scrolling habit without the harm.
+- Scroll through your homemade short video mixes - no ads or toxic content.
 - Simply upload a txt file with a list of short video links to get started.
 - Uses familiar TikTok scroll mechanics.
 - Can be hosted online or launched from the desktop.
